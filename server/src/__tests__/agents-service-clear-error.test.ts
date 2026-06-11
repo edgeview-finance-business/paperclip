@@ -158,6 +158,128 @@ describeEmbeddedPostgres("agent service clearError", () => {
     });
   });
 
+  it("stamps pause metadata when PATCH-style update sets an agent to paused", async () => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix,
+      requireBoardApprovalForNewAgents: false,
+    });
+
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "Bridge Daemon",
+      role: "devops",
+      title: "Task Manager <-> Paperclip Bridge Daemon",
+      status: "idle",
+      adapterType: "process",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+
+    const paused = await agentService(db).update(agentId, { status: "paused" });
+
+    expect(paused).toMatchObject({
+      id: agentId,
+      status: "paused",
+      pauseReason: "manual",
+    });
+    expect(paused?.pausedAt).toBeInstanceOf(Date);
+
+    const [stored] = await db
+      .select({
+        status: agents.status,
+        pauseReason: agents.pauseReason,
+        pausedAt: agents.pausedAt,
+      })
+      .from(agents)
+      .where(eq(agents.id, agentId));
+
+    expect(stored).toMatchObject({
+      status: "paused",
+      pauseReason: "manual",
+    });
+    expect(stored.pausedAt).toBeInstanceOf(Date);
+  });
+
+  it("repairs missing pause metadata when PATCH-style update reaffirms paused state", async () => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix,
+      requireBoardApprovalForNewAgents: false,
+    });
+
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "Bridge Daemon",
+      role: "devops",
+      status: "paused",
+      pauseReason: null,
+      pausedAt: null,
+      adapterType: "process",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+
+    const repaired = await agentService(db).update(agentId, { status: "paused" });
+
+    expect(repaired).toMatchObject({
+      id: agentId,
+      status: "paused",
+      pauseReason: "manual",
+    });
+    expect(repaired?.pausedAt).toBeInstanceOf(Date);
+  });
+
+  it("clears pause metadata when PATCH-style update leaves paused state", async () => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix,
+      requireBoardApprovalForNewAgents: false,
+    });
+
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "Bridge Daemon",
+      role: "devops",
+      status: "paused",
+      pauseReason: "manual",
+      pausedAt: new Date("2026-06-07T00:00:00.000Z"),
+      adapterType: "process",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+
+    const resumed = await agentService(db).update(agentId, { status: "idle" });
+
+    expect(resumed).toMatchObject({
+      id: agentId,
+      status: "idle",
+      pauseReason: null,
+      pausedAt: null,
+    });
+  });
+
   it("rejects non-error agents with a 409 conflict", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();

@@ -4,6 +4,7 @@ import {
   AGENT_ROLES,
   AGENT_STATUSES,
   INBOX_MINE_ISSUE_STATUS_FILTER,
+  PAUSE_REASONS,
 } from "../constants.js";
 import { agentAdapterTypeSchema } from "../adapter-type.js";
 import { envConfigSchema } from "./secret.js";
@@ -101,6 +102,8 @@ export const updateAgentSchema = createAgentSchema
     permissions: z.never().optional(),
     replaceAdapterConfig: z.boolean().optional(),
     status: z.enum(AGENT_STATUSES).optional(),
+    pauseReason: z.enum(PAUSE_REASONS).nullable().optional(),
+    pausedAt: z.coerce.date().nullable().optional(),
     spentMonthlyCents: z.number().int().nonnegative().optional(),
   });
 
